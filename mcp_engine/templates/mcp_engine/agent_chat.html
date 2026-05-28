@@ -1,0 +1,174 @@
+{% extends "mcp_engine/base.html" %}
+{% block title %}Agent Chat{% endblock %}
+
+{% block content %}
+<h1>💬 Agent Chat</h1>
+<p>Chat with Groq-powered AI agents. The agent uses a <strong>ReAct loop</strong>
+   to decide which MCP tools to call before answering.</p>
+
+<div class="warn-box">
+  Make sure <code>GROQ_API_KEY</code> is set in your <code>.env</code> file.
+  Get a free key at <a href="https://console.groq.com" target="_blank">console.groq.com</a>.
+</div>
+
+<div class="card-grid" style="grid-template-columns:1fr 1fr;">
+
+  <!-- ── Left: Chat form ── -->
+  <div>
+    <div class="card">
+      <h2 style="margin-top:0">Send a Message</h2>
+
+      <div class="form-group">
+        <label for="agent-select">Agent</label>
+        <select id="agent-select">
+          <option value="coordinator">🤖 Auto-route (coordinator)</option>
+          {% for card in agent_cards %}
+          <option value="{{ card.name }}">{{ card.display_name }} — {{ card.description|truncatechars:60 }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="user-msg">Your Message</label>
+        <textarea id="user-msg" rows="3" placeholder="e.g. What is the determinant of [[1,2],[3,4]]?"></textarea>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:1rem;">
+        <button class="btn btn-primary" onclick="sendMessage()">Send ↗</button>
+        <button class="btn btn-sm" style="background:#6B7280;color:#fff" onclick="clearChat()">Clear</button>
+        <div class="spinner" id="chat-spinner"></div>
+      </div>
+
+      <!-- Example prompts -->
+      <div style="margin-top:1rem;">
+        <div style="font-size:.8rem;color:#6B7280;margin-bottom:.4rem;">Try these:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:.4rem;">
+          <button class="btn btn-sm" style="background:var(--light);color:var(--navy);border:1px solid var(--border)" onclick="setMsg('Solve x**2 - 4*x + 3 = 0')">Solve equation</button>
+          <button class="btn btn-sm" style="background:var(--light);color:var(--navy);border:1px solid var(--border)" onclick="setMsg('What are the statistics of [10, 20, 30, 45, 55, 60]?')">Statistics</button>
+          <button class="btn btn-sm" style="background:var(--light);color:var(--navy);border:1px solid var(--border)" onclick="setMsg('Convert 100 km/h to m/s and explain')">Unit convert</button>
+          <button class="btn btn-sm" style="background:var(--light);color:var(--navy);border:1px solid var(--border)" onclick="setMsg('Remember that Python asyncio uses an event loop')">Store note</button>
+          <button class="btn btn-sm" style="background:var(--light);color:var(--navy);border:1px solid var(--border)" onclick="setMsg('Find my notes about Python')">Search notes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Right: Chat window ── -->
+  <div>
+    <div class="card" style="padding-bottom:.5rem;">
+      <h2 style="margin-top:0">Conversation</h2>
+      <div class="chat-wrap" id="chat-wrap">
+        <div class="bubble agent">
+          <strong>🤖 Agent Lab</strong><br>
+          Hello! I'm your AI assistant. Ask me a math question or tell me to
+          store/find a note. I'll use the right MCP tool automatically.
+          <div class="meta">System</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Recent sessions -->
+{% if recent %}
+<h2>Recent Sessions</h2>
+<div class="card">
+  <table>
+    <thead><tr><th>Time</th><th>Agent</th><th>Question</th><th>Tools used</th></tr></thead>
+    <tbody>
+      {% for s in recent %}
+      <tr>
+        <td style="white-space:nowrap">{{ s.created_at|date:"H:i:s" }}</td>
+        <td><span class="tag">{{ s.agent_name }}</span></td>
+        <td style="font-size:.8rem;max-width:250px;">{{ s.user_message|truncatechars:80 }}</td>
+        <td style="font-size:.75rem;">
+          {% for tc in s.tool_calls %}<span class="tag" style="font-size:.65rem;">{{ tc }}</span>{% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function setMsg(text) {
+  document.getElementById('user-msg').value = text;
+}
+
+function clearChat() {
+  document.getElementById('chat-wrap').innerHTML = `
+    <div class="bubble agent">
+      <strong>🤖 Agent Lab</strong><br>Chat cleared. Ask me anything!
+      <div class="meta">System</div>
+    </div>`;
+}
+
+function appendBubble(role, content, meta) {
+  const wrap = document.getElementById('chat-wrap');
+  const div = document.createElement('div');
+  div.className = 'bubble ' + role;
+  div.innerHTML = `${content}<div class="meta">${meta || ''}</div>`;
+  wrap.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+async function sendMessage() {
+  const msgInput = document.getElementById('user-msg');
+  const msg = msgInput.value.trim();
+  if (!msg) return;
+
+  const agent = document.getElementById('agent-select').value;
+  const spinner = document.getElementById('chat-spinner');
+
+  appendBubble('user', msg, 'You');
+  msgInput.value = '';
+  spinner.style.display = 'block';
+
+  try {
+    const resp = await fetch('/api/agent/chat/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken')
+      },
+      body: JSON.stringify({ message: msg, agent })
+    });
+    const data = await resp.json();
+
+    const tools = data.tool_calls?.length
+      ? `<br><span style="font-size:.75rem;color:#6B7280">🔧 Tools: ${data.tool_calls.join(', ')}</span>`
+      : '';
+    const agentLabel = data.agent || 'agent';
+
+    appendBubble(
+      'agent',
+      `<strong>🤖 ${agentLabel}</strong><br>${escapeHtml(data.answer || data.error || 'No response')}${tools}`,
+      `Task: ${data.task_id || '—'}`
+    );
+  } catch (e) {
+    appendBubble('agent', `<span style="color:var(--red)">Error: ${e.message}</span>`, 'Error');
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+function getCookie(name) {
+  const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+  return v ? v[2] : '';
+}
+
+// Send on Ctrl+Enter
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('user-msg').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) sendMessage();
+  });
+});
+</script>
+{% endblock %}

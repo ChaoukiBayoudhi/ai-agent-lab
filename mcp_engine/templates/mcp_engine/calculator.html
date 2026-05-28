@@ -1,0 +1,173 @@
+{% extends "mcp_engine/base.html" %}
+{% block title %}MCP Calculator{% endblock %}
+
+{% block content %}
+<h1>🧮 MCP Calculator</h1>
+<p>Call MCP calculator tools directly — no LLM involved. Raw tool execution.</p>
+
+<div class="card-grid" style="grid-template-columns:1fr 1fr;">
+
+  <!-- ── Left: Tool Form ── -->
+  <div>
+    <div class="card">
+      <h2 style="margin-top:0">Select Tool</h2>
+
+      <div class="form-group">
+        <label for="tool">MCP Tool</label>
+        <select id="tool" onchange="showParams()">
+          <option value="calculate">calculate — evaluate expression</option>
+          <option value="solve_equation">solve_equation — symbolic solving</option>
+          <option value="metrics">metrics — descriptive statistics</option>
+          <option value="unit_convert">unit_convert — physical units</option>
+        </select>
+      </div>
+
+      <!-- calculate params -->
+      <div id="params-calculate" class="params-section">
+        <div class="form-group">
+          <label for="expression">Expression</label>
+          <input type="text" id="expression" placeholder="e.g. sqrt(144) + sin(pi/6)" value="sqrt(144) + sin(pi/6)">
+        </div>
+      </div>
+
+      <!-- solve_equation params -->
+      <div id="params-solve_equation" class="params-section" style="display:none">
+        <div class="form-group">
+          <label for="equation">Equation (use '=')</label>
+          <input type="text" id="equation" placeholder="e.g. x**2 - 5*x + 6 = 0" value="x**2 - 5*x + 6 = 0">
+        </div>
+        <div class="form-group">
+          <label for="variable">Variable</label>
+          <input type="text" id="variable" placeholder="x" value="x">
+        </div>
+      </div>
+
+      <!-- metrics params -->
+      <div id="params-metrics" class="params-section" style="display:none">
+        <div class="form-group">
+          <label for="data">Data (comma-separated numbers)</label>
+          <input type="text" id="data" placeholder="e.g. 10, 20, 30, 40, 50" value="10, 20, 30, 40, 50">
+        </div>
+      </div>
+
+      <!-- unit_convert params -->
+      <div id="params-unit_convert" class="params-section" style="display:none">
+        <div class="form-group">
+          <label for="uc_value">Value</label>
+          <input type="number" id="uc_value" value="100">
+        </div>
+        <div class="form-group">
+          <label for="uc_from">From Unit</label>
+          <input type="text" id="uc_from" placeholder="e.g. km/h" value="km/h">
+        </div>
+        <div class="form-group">
+          <label for="uc_to">To Unit</label>
+          <input type="text" id="uc_to" placeholder="e.g. m/s" value="m/s">
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:1rem;margin-top:.5rem;">
+        <button class="btn btn-primary" onclick="runTool()">▶ Run Tool</button>
+        <div class="spinner" id="spinner"></div>
+      </div>
+    </div>
+
+    <!-- Quick examples -->
+    <div class="card">
+      <h3>Quick Examples</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:.5rem;">
+        <button class="btn btn-sm" style="background:var(--teal);color:#fff" onclick="loadExample('calc1')">2^10 + sqrt(9)</button>
+        <button class="btn btn-sm" style="background:var(--teal);color:#fff" onclick="loadExample('solve1')">x²-5x+6=0</button>
+        <button class="btn btn-sm" style="background:var(--teal);color:#fff" onclick="loadExample('metrics1')">Stats on data</button>
+        <button class="btn btn-sm" style="background:var(--teal);color:#fff" onclick="loadExample('unit1')">100 km/h → m/s</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Right: Result ── -->
+  <div>
+    <div class="card">
+      <h2 style="margin-top:0">Result</h2>
+      <div id="result-box" class="result-box" style="min-height:200px;">
+        Run a tool to see the result here.
+      </div>
+    </div>
+
+    <!-- Recent calculations -->
+    {% if recent %}
+    <div class="card">
+      <h3>Recent Calculations</h3>
+      <table>
+        <thead><tr><th>Time</th><th>Tool</th><th>Input</th><th>OK?</th></tr></thead>
+        <tbody>
+          {% for log in recent %}
+          <tr>
+            <td style="white-space:nowrap">{{ log.created_at|date:"H:i:s" }}</td>
+            <td><span class="tag">{{ log.tool_used }}</span></td>
+            <td style="font-size:.8rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ log.expression }}</td>
+            <td>{% if log.success %}✅{% else %}❌{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showParams() {
+  document.querySelectorAll('.params-section').forEach(el => el.style.display = 'none');
+  const tool = document.getElementById('tool').value;
+  document.getElementById('params-' + tool).style.display = 'block';
+}
+
+function loadExample(id) {
+  const sel = document.getElementById('tool');
+  if (id === 'calc1')    { sel.value='calculate'; showParams(); document.getElementById('expression').value='2**10 + sqrt(9)'; }
+  if (id === 'solve1')   { sel.value='solve_equation'; showParams(); document.getElementById('equation').value='x**2 - 5*x + 6 = 0'; }
+  if (id === 'metrics1') { sel.value='metrics'; showParams(); document.getElementById('data').value='12,45,67,89,23,56'; }
+  if (id === 'unit1')    { sel.value='unit_convert'; showParams(); document.getElementById('uc_value').value='100'; document.getElementById('uc_from').value='km/h'; document.getElementById('uc_to').value='m/s'; }
+}
+
+async function runTool() {
+  const tool = document.getElementById('tool').value;
+  const spinner = document.getElementById('spinner');
+  const resultBox = document.getElementById('result-box');
+
+  let params = {};
+  if (tool === 'calculate')     params = { expression: document.getElementById('expression').value };
+  if (tool === 'solve_equation') params = { equation: document.getElementById('equation').value, variable: document.getElementById('variable').value };
+  if (tool === 'metrics')       params = { data: document.getElementById('data').value.split(',').map(Number) };
+  if (tool === 'unit_convert')  params = { value: parseFloat(document.getElementById('uc_value').value), from_unit: document.getElementById('uc_from').value, to_unit: document.getElementById('uc_to').value };
+
+  spinner.style.display = 'block';
+  resultBox.className = 'result-box';
+  resultBox.textContent = 'Running…';
+
+  try {
+    const resp = await fetch('/api/calculate/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify({ tool, params })
+    });
+    const data = await resp.json();
+    resultBox.className = 'result-box ' + (data.result?.error ? 'error' : 'success');
+    resultBox.textContent = JSON.stringify(data.result, null, 2);
+  } catch(e) {
+    resultBox.className = 'result-box error';
+    resultBox.textContent = 'Network error: ' + e.message;
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+function getCookie(name) {
+  const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+  return v ? v[2] : '';
+}
+</script>
+{% endblock %}

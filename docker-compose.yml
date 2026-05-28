@@ -1,0 +1,71 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AI Agent Lab — docker-compose
+#
+# Services
+# --------
+#   web   : Django + Uvicorn (main app)
+#
+# Usage
+# -----
+#   cp .env.example .env          # fill in GROQ_API_KEY
+#   docker compose up --build     # first run
+#   docker compose up -d          # detached
+#   docker compose logs -f web    # tail logs
+#   docker compose down           # stop
+#   docker compose down -v        # stop + remove volumes
+#
+# Environment
+# -----------
+#   All secrets are read from .env (never committed).
+#   See .env.example for required variables.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: ai_agent_lab_web
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Override only if you want to change the default
+      - DJANGO_SETTINGS_MODULE=ai_agent_lab.settings
+      - PORT=8000
+      # SQLite lives inside the container volume
+      - DB_PATH=/app/data/db.sqlite3
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist the SQLite database across container restarts
+      - db_data:/app/data
+      # Persist Django staticfiles (optional — only needed if serving static
+      # files from within the container; in prod, use a CDN or nginx)
+      - static_files:/app/staticfiles
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+    # ── Resource limits (adjust per deployment) ──────────────────────────────
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          memory: 128M
+
+volumes:
+  db_data:
+    driver: local
+  static_files:
+    driver: local

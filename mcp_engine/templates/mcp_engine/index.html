@@ -1,0 +1,94 @@
+{% extends "mcp_engine/base.html" %}
+{% block title %}AI Agent Lab — Home{% endblock %}
+
+{% block content %}
+<h1>🤖 AI Agent Lab</h1>
+<p style="font-size:1.05rem;margin:.5rem 0 1.5rem;">
+  A complete MCP + A2A + Groq ecosystem built with Django. Explore each module below.
+</p>
+
+<div class="info-box">
+  <strong>Architecture:</strong> Two MCP servers (Calculator, Notes) → Two AI agents (MathBot, NoteBot)
+  → A2A orchestration → Groq LLM (llama-3.3-70b-versatile) → Django async views.
+</div>
+
+<!-- Agent Cards -->
+<h2>Registered Agents</h2>
+<div class="card-grid">
+  {% for card in agent_cards %}
+  <div class="card">
+    <div class="card-icon">{% if 'calculator' in card.name %}🧮{% else %}📝{% endif %}</div>
+    <h3>{{ card.display_name }}</h3>
+    <p style="font-size:.85rem;margin:.4rem 0 .75rem;">{{ card.description }}</p>
+    {% for cap in card.capabilities %}
+      <span class="tag">{{ cap }}</span>
+    {% endfor %}
+    <div style="margin-top:.75rem;">
+      {% for skill in card.skills %}
+        <div style="font-size:.8rem;color:#6B7280;padding:2px 0;">• {{ skill }}</div>
+      {% endfor %}
+    </div>
+  </div>
+  {% empty %}
+  <div class="card">
+    <div class="warn-box">
+      No agents registered yet. Make sure <code>GROQ_API_KEY</code> is set in your <code>.env</code> file.
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Module Overview -->
+<h2>Modules</h2>
+<div class="card-grid">
+  <a href="{% url 'mcp_engine:calculator' %}" style="text-decoration:none;color:inherit;">
+    <div class="card" style="cursor:pointer;border-color:var(--teal)">
+      <div class="card-icon">🧮</div>
+      <h3>MCP Calculator</h3>
+      <p style="font-size:.85rem;">Direct MCP tool calls — calculate, solve equations,
+      statistics, unit conversions, matrix operations.</p>
+    </div>
+  </a>
+  <a href="{% url 'mcp_engine:agent' %}" style="text-decoration:none;color:inherit;">
+    <div class="card" style="cursor:pointer;border-color:var(--navy)">
+      <div class="card-icon">💬</div>
+      <h3>Agent Chat</h3>
+      <p style="font-size:.85rem;">Chat with Groq-powered AI agents. The ReAct loop
+      decides which MCP tools to use automatically.</p>
+    </div>
+  </a>
+  <a href="{% url 'mcp_engine:a2a' %}" style="text-decoration:none;color:inherit;">
+    <div class="card" style="cursor:pointer;border-color:var(--gold)">
+      <div class="card-icon">🔁</div>
+      <h3>A2A Protocol</h3>
+      <p style="font-size:.85rem;">Agent-to-Agent communication demo. Send tasks from
+      one agent to another and watch the routing in real time.</p>
+    </div>
+  </a>
+  <a href="{% url 'mcp_engine:notes' %}" style="text-decoration:none;color:inherit;">
+    <div class="card" style="cursor:pointer;border-color:var(--green)">
+      <div class="card-icon">📝</div>
+      <h3>Notes MCP Server</h3>
+      <p style="font-size:.85rem;">Create, search, and manage notes via the Notes MCP server
+      directly or through the NoteBot agent.</p>
+    </div>
+  </a>
+</div>
+
+<!-- API Summary -->
+<h2>REST API Endpoints</h2>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>Method</th><th>URL</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><span class="tag navy">POST</span></td><td><code>/api/calculate/</code></td><td>Direct MCP calculator tool call</td></tr>
+      <tr><td><span class="tag navy">POST</span></td><td><code>/api/agent/chat/</code></td><td>Groq agent chat (ReAct loop)</td></tr>
+      <tr><td><span class="tag navy">POST</span></td><td><code>/api/a2a/delegate/</code></td><td>A2A task delegation</td></tr>
+      <tr><td><span class="tag green">GET</span></td><td><code>/api/agents/</code></td><td>List registered agent cards</td></tr>
+      <tr><td><span class="tag green">GET</span></td><td><code>/.well-known/agent.json</code></td><td>Coordinator Agent Card</td></tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}

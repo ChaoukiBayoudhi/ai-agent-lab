@@ -1,0 +1,304 @@
+{% extends "mcp_engine/base.html" %}
+{% block title %}Notes MCP Server{% endblock %}
+
+{% block content %}
+<h1>📝 Notes MCP Server</h1>
+<p>Create, search, and manage notes directly via the <strong>Notes MCP Server</strong>
+   or delegate through the <strong>NoteBot agent</strong> (Groq-powered).</p>
+
+<div class="info-box">
+  <strong>MCP Tools available:</strong>
+  <code>create_note</code> · <code>get_note</code> · <code>list_notes</code> ·
+  <code>search_notes</code> · <code>update_note</code> · <code>delete_note</code>
+</div>
+
+<div class="card-grid" style="grid-template-columns:1fr 1fr;">
+
+  <!-- ── Left: Actions ── -->
+  <div>
+
+    <!-- Create note -->
+    <div class="card">
+      <h2 style="margin-top:0">Create a Note</h2>
+      <div class="form-group">
+        <label for="note-title">Title</label>
+        <input type="text" id="note-title" placeholder="e.g. Django async patterns">
+      </div>
+      <div class="form-group">
+        <label for="note-content">Content</label>
+        <textarea id="note-content" rows="4" placeholder="Write your note here…"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="note-tags">Tags (comma-separated)</label>
+        <input type="text" id="note-tags" placeholder="e.g. django, async, python">
+      </div>
+      <div style="display:flex;align-items:center;gap:1rem;">
+        <button class="btn btn-secondary" onclick="createNote()">📝 Create Note</button>
+        <div class="spinner" id="create-spinner"></div>
+      </div>
+      <div id="create-result" class="result-box" style="display:none;margin-top:.75rem;"></div>
+    </div>
+
+    <!-- Search notes -->
+    <div class="card">
+      <h2 style="margin-top:0">Search Notes</h2>
+      <div class="form-group">
+        <label for="search-query">Search Query</label>
+        <div style="display:flex;gap:.5rem;">
+          <input type="text" id="search-query" placeholder="e.g. asyncio event loop">
+          <button class="btn btn-primary" onclick="searchNotes()" style="white-space:nowrap;">🔍 Search</button>
+        </div>
+      </div>
+      <div class="spinner" id="search-spinner" style="margin-top:.5rem;"></div>
+      <div id="search-results" style="margin-top:.75rem;"></div>
+    </div>
+
+  </div>
+
+  <!-- ── Right: Note list + NoteBot ── -->
+  <div>
+
+    <!-- NoteBot agent -->
+    <div class="card">
+      <h2 style="margin-top:0">💬 Ask NoteBot</h2>
+      <p style="font-size:.85rem;color:#6B7280;margin-bottom:.75rem;">
+        Let the AI agent handle notes for you in natural language.
+      </p>
+      <div class="form-group">
+        <label for="notebot-msg">Message</label>
+        <textarea id="notebot-msg" rows="2"
+          placeholder="e.g. Remember that Django ORM is synchronous by default"></textarea>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.75rem;">
+        <button class="btn btn-sm" style="background:var(--light);color:var(--navy);border:1px solid var(--border)"
+          onclick="setNoteMsg('Remember: Django signals fire synchronously in the same thread')">
+          Store note
+        </button>
+        <button class="btn btn-sm" style="background:var(--light);color:var(--navy);border:1px solid var(--border)"
+          onclick="setNoteMsg('Find my notes about Django')">
+          Find notes
+        </button>
+        <button class="btn btn-sm" style="background:var(--light);color:var(--navy);border:1px solid var(--border)"
+          onclick="setNoteMsg('List all my notes')">
+          List all
+        </button>
+      </div>
+      <div style="display:flex;align-items:center;gap:1rem;">
+        <button class="btn btn-gold" onclick="askNoteBot()">🤖 Ask NoteBot</button>
+        <div class="spinner" id="bot-spinner"></div>
+      </div>
+      <div id="bot-result" style="display:none;" class="result-box success" style="margin-top:.75rem;"></div>
+    </div>
+
+    <!-- All notes list -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;">
+        <h2 style="margin-top:0;margin-bottom:0">All Notes</h2>
+        <button class="btn btn-sm btn-secondary" onclick="listNotes()">↻ Refresh</button>
+      </div>
+      <div class="spinner" id="list-spinner"></div>
+      <div id="notes-list">
+        <p style="color:#9CA3AF;font-size:.9rem;">Click Refresh to load notes.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Recent Notes (from DB log) -->
+{% if recent %}
+<h2>Recent Note Operations</h2>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>Time</th><th>Agent</th><th>Action</th><th>Details</th></tr>
+    </thead>
+    <tbody>
+      {% for s in recent %}
+      <tr>
+        <td style="white-space:nowrap;font-size:.8rem;">{{ s.created_at|date:"H:i:s" }}</td>
+        <td><span class="tag">{{ s.agent_name }}</span></td>
+        <td style="font-size:.8rem;">
+          {% for tc in s.tool_calls %}<span class="tag" style="font-size:.65rem;background:var(--green)">{{ tc }}</span>{% endfor %}
+        </td>
+        <td style="font-size:.8rem;max-width:250px;">{{ s.user_message|truncatechars:80 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function setNoteMsg(text) {
+  document.getElementById('notebot-msg').value = text;
+}
+
+/* ── Create Note ── */
+async function createNote() {
+  const title   = document.getElementById('note-title').value.trim();
+  const content = document.getElementById('note-content').value.trim();
+  const tagsRaw = document.getElementById('note-tags').value.trim();
+  if (!title || !content) { alert('Title and content are required.'); return; }
+
+  const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+  const spinner = document.getElementById('create-spinner');
+  const result  = document.getElementById('create-result');
+
+  spinner.style.display = 'block';
+  result.style.display  = 'none';
+
+  try {
+    const resp = await fetch('/api/calculate/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify({ tool: 'create_note', params: { title, content, tags }, server: 'notes' })
+    });
+    const data = await resp.json();
+    result.style.display = 'block';
+    result.className = 'result-box ' + (data.result?.error ? 'error' : 'success');
+    result.textContent = JSON.stringify(data.result, null, 2);
+    if (!data.result?.error) {
+      document.getElementById('note-title').value   = '';
+      document.getElementById('note-content').value = '';
+      document.getElementById('note-tags').value    = '';
+    }
+  } catch(e) {
+    result.style.display = 'block';
+    result.className = 'result-box error';
+    result.textContent = 'Network error: ' + e.message;
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+/* ── List Notes ── */
+async function listNotes() {
+  const spinner = document.getElementById('list-spinner');
+  const container = document.getElementById('notes-list');
+  spinner.style.display = 'block';
+  container.innerHTML = '';
+
+  try {
+    const resp = await fetch('/api/calculate/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify({ tool: 'list_notes', params: {}, server: 'notes' })
+    });
+    const data = await resp.json();
+    const notes = data.result?.notes || [];
+
+    if (!notes.length) {
+      container.innerHTML = '<p style="color:#9CA3AF;font-size:.9rem;">No notes yet. Create one above!</p>';
+      return;
+    }
+
+    container.innerHTML = notes.map(n => `
+      <div style="border:1px solid var(--border);border-radius:6px;padding:.75rem;margin-bottom:.5rem;background:#fafafa;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <strong style="color:var(--navy);">${escapeHtml(n.title)}</strong>
+          <span style="font-size:.7rem;color:#9CA3AF;">${n.id?.slice(0,8) || ''}</span>
+        </div>
+        <p style="font-size:.82rem;margin:.3rem 0;color:#374151;white-space:pre-wrap;">${escapeHtml(n.content?.slice(0,120))}${n.content?.length > 120 ? '…' : ''}</p>
+        ${n.tags?.length ? `<div>${n.tags.map(t => `<span class="tag" style="font-size:.65rem;">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+      </div>
+    `).join('');
+  } catch(e) {
+    container.innerHTML = `<p style="color:var(--red)">Error: ${e.message}</p>`;
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+/* ── Search Notes ── */
+async function searchNotes() {
+  const query = document.getElementById('search-query').value.trim();
+  if (!query) return;
+
+  const spinner = document.getElementById('search-spinner');
+  const container = document.getElementById('search-results');
+  spinner.style.display = 'block';
+  container.innerHTML = '';
+
+  try {
+    const resp = await fetch('/api/calculate/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify({ tool: 'search_notes', params: { query }, server: 'notes' })
+    });
+    const data = await resp.json();
+    const notes = data.result?.results || data.result?.notes || [];
+
+    if (!notes.length) {
+      container.innerHTML = '<p style="color:#9CA3AF;font-size:.9rem;">No notes matched your query.</p>';
+      return;
+    }
+
+    container.innerHTML = `<p style="font-size:.8rem;color:#6B7280;margin-bottom:.4rem;">${notes.length} result(s):</p>` +
+      notes.map(n => `
+        <div style="border-left:3px solid var(--teal);padding:.5rem .75rem;margin-bottom:.4rem;background:#f0fdfc;border-radius:0 6px 6px 0;">
+          <strong style="font-size:.9rem;">${escapeHtml(n.title)}</strong>
+          <p style="font-size:.8rem;margin:.2rem 0;color:#374151;">${escapeHtml(n.content?.slice(0,100))}…</p>
+        </div>
+      `).join('');
+  } catch(e) {
+    container.innerHTML = `<p style="color:var(--red)">Error: ${e.message}</p>`;
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+/* ── NoteBot agent ── */
+async function askNoteBot() {
+  const msg = document.getElementById('notebot-msg').value.trim();
+  if (!msg) return;
+
+  const spinner = document.getElementById('bot-spinner');
+  const result  = document.getElementById('bot-result');
+
+  spinner.style.display = 'block';
+  result.style.display  = 'none';
+
+  try {
+    const resp = await fetch('/api/agent/chat/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify({ message: msg, agent: 'notes_agent' })
+    });
+    const data = await resp.json();
+
+    const tools = data.tool_calls?.length
+      ? `\n\n🔧 Tools used: ${data.tool_calls.join(', ')}`
+      : '';
+    result.style.display = 'block';
+    result.textContent = (data.answer || data.error || 'No response') + tools;
+  } catch(e) {
+    result.style.display = 'block';
+    result.className = 'result-box error';
+    result.textContent = 'Error: ' + e.message;
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+/* ── Utilities ── */
+function escapeHtml(text) {
+  return String(text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function getCookie(name) {
+  const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+  return v ? v[2] : '';
+}
+
+// Search on Enter
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('search-query').addEventListener('keydown', e => {
+    if (e.key === 'Enter') searchNotes();
+  });
+  listNotes();
+});
+</script>
+{% endblock %}

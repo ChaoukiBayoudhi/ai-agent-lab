@@ -1,0 +1,182 @@
+{% extends "mcp_engine/base.html" %}
+{% block title %}History & Logs{% endblock %}
+
+{% block content %}
+<h1>📋 History &amp; Logs</h1>
+<p>Audit trail for all MCP tool calls, agent sessions, and A2A task delegations.</p>
+
+<!-- Stats bar -->
+<div class="card-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:.5rem;">
+  <div class="card" style="text-align:center;padding:.9rem;">
+    <div style="font-size:2rem;font-weight:700;color:var(--teal);">{{ calc_count }}</div>
+    <div style="font-size:.85rem;color:#6B7280;">MCP Calculations</div>
+  </div>
+  <div class="card" style="text-align:center;padding:.9rem;">
+    <div style="font-size:2rem;font-weight:700;color:var(--navy);">{{ session_count }}</div>
+    <div style="font-size:.85rem;color:#6B7280;">Agent Sessions</div>
+  </div>
+  <div class="card" style="text-align:center;padding:.9rem;">
+    <div style="font-size:2rem;font-weight:700;color:var(--gold);">{{ a2a_count }}</div>
+    <div style="font-size:.85rem;color:#6B7280;">A2A Tasks</div>
+  </div>
+</div>
+
+<!-- Tab navigation -->
+<div style="display:flex;gap:.5rem;margin-bottom:1rem;border-bottom:2px solid var(--border);padding-bottom:.5rem;">
+  <button id="tab-calc"    class="tab-btn active" onclick="showTab('calc')">🧮 Calculations</button>
+  <button id="tab-session" class="tab-btn"        onclick="showTab('session')">💬 Agent Sessions</button>
+  <button id="tab-a2a"     class="tab-btn"        onclick="showTab('a2a')">🔁 A2A Tasks</button>
+</div>
+
+<!-- ── Calculations tab ── -->
+<div id="pane-calc">
+  {% if calc_logs %}
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:90px;">Time</th>
+          <th>Tool</th>
+          <th>Expression / Input</th>
+          <th style="width:60px;">OK?</th>
+          <th>Result preview</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in calc_logs %}
+        <tr>
+          <td style="white-space:nowrap;font-size:.78rem;">{{ log.created_at|date:"d/m H:i:s" }}</td>
+          <td><span class="tag">{{ log.tool_used }}</span></td>
+          <td style="font-size:.8rem;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;">{{ log.expression }}</td>
+          <td style="text-align:center;">{% if log.success %}✅{% else %}❌{% endif %}</td>
+          <td style="font-size:.78rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;color:#374151;">
+            {{ log.result_preview|default:"—" }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card">
+    <p style="color:#9CA3AF;">No calculations yet. Try the <a href="{% url 'mcp_engine:calculator' %}">MCP Calculator</a>.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── Agent Sessions tab ── -->
+<div id="pane-session" style="display:none;">
+  {% if session_logs %}
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:90px;">Time</th>
+          <th>Agent</th>
+          <th>User Message</th>
+          <th>Tools used</th>
+          <th>Answer preview</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in session_logs %}
+        <tr>
+          <td style="white-space:nowrap;font-size:.78rem;">{{ s.created_at|date:"d/m H:i:s" }}</td>
+          <td><span class="tag navy">{{ s.agent_name }}</span></td>
+          <td style="font-size:.8rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ s.user_message|truncatechars:60 }}</td>
+          <td style="font-size:.75rem;">
+            {% for tc in s.tool_calls %}<span class="tag" style="font-size:.62rem;">{{ tc }}</span>{% endfor %}
+            {% if not s.tool_calls %}<span style="color:#9CA3AF;">—</span>{% endif %}
+          </td>
+          <td style="font-size:.78rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#374151;">
+            {{ s.answer|truncatechars:60 }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card">
+    <p style="color:#9CA3AF;">No agent sessions yet. Try the <a href="{% url 'mcp_engine:agent' %}">Agent Chat</a>.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── A2A Tasks tab ── -->
+<div id="pane-a2a" style="display:none;">
+  {% if a2a_logs %}
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:90px;">Time</th>
+          <th>From</th>
+          <th>To</th>
+          <th>State</th>
+          <th>Task Message</th>
+          <th>Tools</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in a2a_logs %}
+        <tr>
+          <td style="white-space:nowrap;font-size:.78rem;">{{ log.created_at|date:"d/m H:i:s" }}</td>
+          <td><span class="tag navy">{{ log.from_agent }}</span></td>
+          <td><span class="tag">{{ log.to_agent }}</span></td>
+          <td>
+            {% if log.state == 'completed' %}<span class="tag green">✓ done</span>
+            {% elif log.state == 'failed'    %}<span class="tag" style="background:var(--red)">✗ fail</span>
+            {% else %}<span class="tag gold">{{ log.state }}</span>{% endif %}
+          </td>
+          <td style="font-size:.8rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ log.message|truncatechars:60 }}</td>
+          <td style="font-size:.75rem;">
+            {% for tc in log.tool_calls %}<span class="tag" style="font-size:.62rem;">{{ tc }}</span>{% endfor %}
+            {% if not log.tool_calls %}<span style="color:#9CA3AF;">—</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card">
+    <p style="color:#9CA3AF;">No A2A tasks yet. Try the <a href="{% url 'mcp_engine:a2a' %}">A2A Demo</a>.</p>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_head %}
+<style>
+.tab-btn {
+  background: none;
+  border: 2px solid transparent;
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: .45rem 1.1rem;
+  font-size: .875rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: #6B7280;
+  transition: all .15s;
+}
+.tab-btn:hover { color: var(--navy); }
+.tab-btn.active {
+  border-bottom-color: var(--navy);
+  color: var(--navy);
+  background: #fff;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showTab(name) {
+  ['calc','session','a2a'].forEach(t => {
+    document.getElementById('pane-'  + t).style.display = t === name ? 'block' : 'none';
+    document.getElementById('tab-'   + t).classList.toggle('active', t === name);
+  });
+}
+</script>
+{% endblock %}

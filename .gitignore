@@ -1,0 +1,71 @@
+# ── Secrets — NEVER commit these ─────────────────────────────────────────────
+.env
+*.env
+.env.local
+.env.*.local
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+lib/
+lib64/
+sdist/
+develop-eggs/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+myenv/
+venv/
+.venv/
+env/
+ENV/
+
+# ── Django ────────────────────────────────────────────────────────────────────
+db.sqlite3
+*.sqlite3
+/staticfiles/
+/media/
+local_settings.py
+
+# ── Tests ─────────────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+
+# ── Editor / OS ───────────────────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+Thumbs.db
+Desktop.ini
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+# Keep Dockerfile and docker-compose.yml — only ignore generated artefacts
+
+# ── LaTeX build output ────────────────────────────────────────────────────────
+*.aux
+*.log
+*.bbl
+*.blg
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+docs/*.pdf

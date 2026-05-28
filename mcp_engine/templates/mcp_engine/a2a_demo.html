@@ -1,0 +1,189 @@
+{% extends "mcp_engine/base.html" %}
+{% block title %}A2A Protocol Demo{% endblock %}
+
+{% block content %}
+<h1>🔁 A2A Protocol Demo</h1>
+<p>Simulate <strong>Agent-to-Agent</strong> task delegation.
+   One agent sends a task to another via the A2A message bus.</p>
+
+<div class="info-box">
+  <strong>A2A Flow:</strong>
+  Sender agent → A2AMessage (JSON) → TaskRouter → Target agent → Groq LLM + MCP tools → Result back.
+</div>
+
+<div class="card-grid" style="grid-template-columns:1fr 1fr;">
+
+  <!-- ── Left: Task form ── -->
+  <div>
+    <div class="card">
+      <h2 style="margin-top:0">Delegate a Task</h2>
+
+      <div class="form-group">
+        <label for="from-agent">From Agent</label>
+        <select id="from-agent">
+          <option value="user">user (you)</option>
+          <option value="planning_agent">planning_agent</option>
+          <option value="coordinator">coordinator</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="to-agent">To Agent</label>
+        <select id="to-agent">
+          <option value="coordinator">coordinator (auto-route)</option>
+          <option value="calculator_agent">calculator_agent</option>
+          <option value="notes_agent">notes_agent</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="task-message">Task Message</label>
+        <textarea id="task-message" rows="3" placeholder="e.g. Calculate the inverse of [[2,1],[5,3]]"></textarea>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:1rem;">
+        <button class="btn btn-gold" onclick="delegateTask()">🚀 Delegate</button>
+        <div class="spinner" id="a2a-spinner"></div>
+      </div>
+
+      <div style="margin-top:1rem;">
+        <div style="font-size:.8rem;color:#6B7280;margin-bottom:.5rem;">A2A Scenarios:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:.4rem;">
+          <button class="btn btn-sm" style="background:var(--light);color:var(--navy);border:1px solid var(--border)"
+            onclick="setTask('planning_agent','calculator_agent','Compute sqrt(2)+log(e^3)')">
+            Planner → MathBot
+          </button>
+          <button class="btn btn-sm" style="background:var(--light);color:var(--navy);border:1px solid var(--border)"
+            onclick="setTask('coordinator','notes_agent','Remember: the event loop processes coroutines one at a time')">
+            Coordinator → NoteBot
+          </button>
+          <button class="btn btn-sm" style="background:var(--light);color:var(--navy);border:1px solid var(--border)"
+            onclick="setTask('user','coordinator','What is 2**20 and convert 1 mile to km?')">
+            User → Auto-route
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Right: Result ── -->
+  <div>
+    <div class="card">
+      <h2 style="margin-top:0">A2A Result</h2>
+      <div id="a2a-result" style="display:none;">
+        <div style="display:flex;gap:1rem;margin-bottom:.75rem;font-size:.875rem;">
+          <div><strong>Task ID:</strong> <code id="res-task-id"></code></div>
+          <div><strong>State:</strong> <span id="res-state" class="tag green"></span></div>
+        </div>
+        <div style="margin-bottom:.5rem;">
+          <strong>Route:</strong>
+          <code id="res-from"></code> → <code id="res-to"></code>
+        </div>
+        <div style="margin-bottom:.75rem;font-size:.8rem;color:#6B7280;">
+          <strong>Tools called:</strong> <span id="res-tools">—</span>
+        </div>
+        <div class="result-box success" id="res-answer" style="min-height:100px;"></div>
+      </div>
+      <div id="a2a-placeholder" style="color:#9CA3AF;font-size:.9rem;">
+        Delegate a task to see the routing and result here.
+      </div>
+    </div>
+
+    <!-- Architecture diagram -->
+    <div class="card">
+      <h3>A2A Message Flow</h3>
+      <div style="font-family:monospace;font-size:.8rem;line-height:2;color:var(--dark);">
+        <div style="color:var(--navy);font-weight:700;">Sender Agent</div>
+        <div style="padding-left:.5rem;">└─ creates A2AMessage</div>
+        <div style="padding-left:1rem;">└─ POST /api/a2a/delegate/</div>
+        <div style="padding-left:1.5rem;">└─ <span style="color:var(--gold);font-weight:700;">TaskRouter</span></div>
+        <div style="padding-left:2rem;">├─ keyword routing</div>
+        <div style="padding-left:2rem;">└─ agent registry lookup</div>
+        <div style="padding-left:2.5rem;">└─ <span style="color:var(--teal);font-weight:700;">Target Agent</span></div>
+        <div style="padding-left:3rem;">├─ Groq LLM (ReAct)</div>
+        <div style="padding-left:3rem;">├─ MCP tool calls</div>
+        <div style="padding-left:3rem;">└─ returns result</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Task log -->
+{% if recent %}
+<h2>A2A Task Log</h2>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>Time</th><th>From</th><th>To</th><th>State</th><th>Message</th></tr>
+    </thead>
+    <tbody>
+      {% for log in recent %}
+      <tr>
+        <td style="white-space:nowrap;font-size:.8rem;">{{ log.created_at|date:"H:i:s" }}</td>
+        <td><span class="tag navy">{{ log.from_agent }}</span></td>
+        <td><span class="tag">{{ log.to_agent }}</span></td>
+        <td>
+          {% if log.state == 'completed' %}<span class="tag green">✓ done</span>
+          {% elif log.state == 'failed' %}<span class="tag" style="background:var(--red)">✗ fail</span>
+          {% else %}<span class="tag gold">{{ log.state }}</span>{% endif %}
+        </td>
+        <td style="font-size:.8rem;">{{ log.message|truncatechars:70 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function setTask(from, to, msg) {
+  document.getElementById('from-agent').value = from;
+  document.getElementById('to-agent').value = to;
+  document.getElementById('task-message').value = msg;
+}
+
+async function delegateTask() {
+  const message = document.getElementById('task-message').value.trim();
+  if (!message) return;
+
+  const fromAgent = document.getElementById('from-agent').value;
+  const toAgent   = document.getElementById('to-agent').value;
+  const spinner   = document.getElementById('a2a-spinner');
+
+  spinner.style.display = 'block';
+  document.getElementById('a2a-placeholder').style.display = 'none';
+  document.getElementById('a2a-result').style.display = 'none';
+
+  try {
+    const resp = await fetch('/api/a2a/delegate/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify({ message, from_agent: fromAgent, to_agent: toAgent })
+    });
+    const data = await resp.json();
+
+    document.getElementById('res-task-id').textContent = data.task_id || '—';
+    document.getElementById('res-state').textContent   = data.state  || '—';
+    document.getElementById('res-from').textContent    = data.from_agent || fromAgent;
+    document.getElementById('res-to').textContent      = data.to_agent  || toAgent;
+    document.getElementById('res-tools').textContent   = data.tool_calls?.join(', ') || '—';
+    document.getElementById('res-answer').textContent  = data.result || data.error || 'No result';
+    document.getElementById('a2a-result').style.display = 'block';
+  } catch (e) {
+    document.getElementById('a2a-result').style.display = 'block';
+    document.getElementById('res-answer').textContent = 'Error: ' + e.message;
+    document.getElementById('res-answer').className = 'result-box error';
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+function getCookie(name) {
+  const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+  return v ? v[2] : '';
+}
+</script>
+{% endblock %}

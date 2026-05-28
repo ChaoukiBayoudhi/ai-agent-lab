@@ -1,0 +1,83 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+.eggs/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+myenv/
+venv/
+.venv/
+env/
+ENV/
+.env.local
+.env.*.local
+
+# ── Secrets (NEVER in Docker image) ──────────────────────────────────────────
+.env
+
+# ── Django ────────────────────────────────────────────────────────────────────
+db.sqlite3
+*.sqlite3
+/staticfiles/
+/media/
+
+# ── Tests ─────────────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+pytest.ini
+# Keep test source for CI builds — comment this out if you run tests in Docker
+# mcp_engine/tests/
+
+# ── Version control ───────────────────────────────────────────────────────────
+.git/
+.gitignore
+.gitattributes
+
+# ── Editor / OS ───────────────────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+Thumbs.db
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# ── Docs / LaTeX ──────────────────────────────────────────────────────────────
+docs/
+*.tex
+*.pdf
+*.aux
+*.log
+*.bbl
+*.blg
+
+# ── Notebooks ─────────────────────────────────────────────────────────────────
+*.ipynb
+.ipynb_checkpoints/
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+*.md
+LICENSE
