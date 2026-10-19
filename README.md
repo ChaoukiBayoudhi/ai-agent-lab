@@ -3,7 +3,7 @@
 > A Django teaching lab that wires **LLM agents**, **MCP tool servers**, and **Agent-to-Agent (A2A)** delegation into one runnable application.
 
 [![Django](https://img.shields.io/badge/Django-6.0-092E20?style=flat&logo=django&logoColor=white)](https://www.djangoproject.com/)
-[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-1.26-6366F1?style=flat)](https://modelcontextprotocol.io/)
 [![Groq](https://img.shields.io/badge/LLM-Groq-f55036?style=flat)](https://console.groq.com/)
 
@@ -104,7 +104,7 @@ ai-agent-lab/
 
 ### Prerequisites
 
-- Python **3.11+**
+- Python **3.12+** (Django 6 requires it)
 - A free [Groq API key](https://console.groq.com) (optional for UI exploration; required for agent chat)
 
 ### Local development
