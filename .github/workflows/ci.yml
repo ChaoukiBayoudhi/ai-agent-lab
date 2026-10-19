@@ -1,4 +1,4 @@
-# CI for Django/Python repos.
+# CI for the AI Agent Lab: install and run the pytest suite (mcp_engine/tests).
 name: CI
 
 on:
@@ -11,8 +11,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: [ "3.11", "3.12" ]
+        python-version: [ "3.12", "3.13" ]   # Django 6.x requires Python >= 3.12
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,16 +24,17 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
+          cache-dependency-path: requirements.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install ruff
+          pip install -r requirements.txt ruff
 
       - name: Lint (ruff)
         run: ruff check . || true   # remove "|| true" once the codebase is clean
 
-      - name: Run tests
-        run: |
-          if [ -f manage.py ]; then python manage.py test; else pytest -q || true; fi
+      - name: Run tests (pytest)
+        # No GROQ_API_KEY in CI: the orchestrator degrades gracefully and the
+        # suite does not call the live API.
+        run: python -m pytest
